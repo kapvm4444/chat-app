@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
 let socket;
@@ -15,6 +15,18 @@ export default function Home() {
   const [newRoomName, setNewRoomName] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState("");
+  const [activeTab, setActiveTab] = useState("join");
+
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Auto-scroll when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
     socketInitializer();
@@ -93,10 +105,13 @@ export default function Home() {
   const createRoom = () => {
     if (!isConnected) return;
 
-    if (newRoomName.trim()) {
-      socket.emit("create-room", { roomName: newRoomName.trim() });
+    if (newRoomName.trim() && username.trim()) {
+      socket.emit('create-room', { roomName: newRoomName.trim() });
+      setSelectedRoom(newRoomName.trim());
+      setNewRoomName("");
     }
   };
+
 
   const leaveRoom = () => {
     if (socket) {
@@ -152,7 +167,8 @@ export default function Home() {
             Join Chat Room
           </h1>
 
-          <div className="mb-4">
+          {/* Username Input */}
+          <div className="mb-6">
             <label className="block text-gray-300 text-sm font-bold mb-2">
               Your Name
             </label>
@@ -160,62 +176,92 @@ export default function Home() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              onKeyPress={(e) => handleKeyPress(e, joinRoom)}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100 placeholder-gray-400"
               placeholder="Enter your username"
               maxLength={20}
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block text-gray-300 text-sm font-bold mb-2">
-              Select Room
-            </label>
-            <select
-              value={selectedRoom}
-              onChange={(e) => setSelectedRoom(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100"
+          {/* Tab Navigation */}
+          <div className="flex mb-4 bg-gray-700 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab("join")}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "join"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-300 hover:text-white"
+              }`}
             >
-              <option value="">Choose a room...</option>
-              {rooms.map((room, index) => (
-                <option key={index} value={room.name}>
-                  {room.name} ({room.userCount} users)
-                </option>
-              ))}
-            </select>
+              Join Room
+            </button>
+            <button
+              onClick={() => setActiveTab("create")}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "create"
+                  ? "bg-green-600 text-white"
+                  : "text-gray-300 hover:text-white"
+              }`}
+            >
+              Create Room
+            </button>
           </div>
 
-          <div className="mb-6">
-            <label className="block text-gray-300 text-sm font-bold mb-2">
-              Or Create New Room
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newRoomName}
-                onChange={(e) => setNewRoomName(e.target.value)}
-                onKeyPress={(e) => handleKeyPress(e, createRoom)}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100 placeholder-gray-400"
-                placeholder="Room name"
-                maxLength={30}
-              />
+          {/* Tab Content */}
+          {activeTab === "join" ? (
+            <div>
+              <div className="mb-6">
+                <label className="block text-gray-300 text-sm font-bold mb-2">
+                  Select Room
+                </label>
+                <select
+                  value={selectedRoom}
+                  onChange={(e) => setSelectedRoom(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100"
+                >
+                  <option value="">Choose a room...</option>
+                  {rooms.map((room, index) => (
+                    <option key={index} value={room.name}>
+                      {room.name} ({room.userCount} users)
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
-                onClick={createRoom}
-                disabled={!newRoomName.trim()}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-600"
+                onClick={joinRoom}
+                disabled={!username.trim() || !selectedRoom.trim()}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 font-medium"
               >
-                Create
+                Join Room
               </button>
             </div>
-          </div>
-
-          <button
-            onClick={joinRoom}
-            disabled={!username.trim() || !selectedRoom.trim()}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 font-medium"
-          >
-            Join Room
-          </button>
+          ) : (
+            <div>
+              <div className="mb-6">
+                <label className="block text-gray-300 text-sm font-bold mb-2">
+                  Room Name
+                </label>
+                <input
+                  type="text"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  onKeyPress={(e) => handleKeyPress(e, createRoom)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-100 placeholder-gray-400"
+                  placeholder="Enter room name"
+                  maxLength={30}
+                />
+              </div>
+              <button
+                onClick={() => {
+                  createRoom();
+                  setActiveTab("join");
+                }}
+                disabled={!username.trim() || !newRoomName.trim()}
+                className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:bg-gray-600 font-medium"
+              >
+                Create & Join Room
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -264,6 +310,7 @@ export default function Home() {
               <div className="text-xs opacity-70 mt-1">{message.timestamp}</div>
             </div>
           ))}
+          <div ref={messagesEndRef}/>
         </div>
       </div>
 
