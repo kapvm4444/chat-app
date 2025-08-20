@@ -1,103 +1,292 @@
-import Image from "next/image";
+"use client";
+import React, { useEffect, useState } from "react";
+import { io } from "socket.io-client";
+
+let socket;
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [currentScreen, setCurrentScreen] = useState("join");
+  const [userCount, setUserCount] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [username, setUsername] = useState("");
+  const [selectedRoom, setSelectedRoom] = useState("");
+  const [rooms, setRooms] = useState([]);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    socketInitializer();
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, []);
+
+  const socketInitializer = async () => {
+    try {
+      // socket = io(`http://localhost:${process.env.PORT || 3001}`);
+      socket = io();
+
+      socket.on("connect", () => {
+        console.log(`Socket connected: ${socket.id}`);
+        setIsConnected(true);
+        setConnectionError("");
+        socket.emit("get-rooms");
+      });
+
+      socket.on("connect_error", (error) => {
+        console.error("Connection error:", error);
+        setConnectionError("Failed to connect to server");
+        setIsConnected(false);
+      });
+
+      socket.on("disconnect", () => {
+        setIsConnected(false);
+        setCurrentScreen("join");
+      });
+
+      socket.on("rooms-list", (roomsList) => {
+        setRooms(roomsList);
+      });
+
+      socket.on("room-joined", (data) => {
+        setMessages(data.messages);
+        setUserCount(data.userCount);
+        setCurrentScreen("chat");
+      });
+
+      socket.on("user-count-updated", (count) => {
+        setUserCount(count);
+      });
+
+      socket.on("message-received", (message) => {
+        setMessages((prev) => [...prev, message]);
+      });
+
+      socket.on("room-created", (room) => {
+        setRooms((prev) => [...prev, room]);
+        setNewRoomName("");
+      });
+    } catch (error) {
+      console.error("Socket initialization error:", error);
+      setConnectionError("Failed to initialize connection");
+    }
+  };
+
+  const joinRoom = () => {
+    if (!isConnected) {
+      setConnectionError("Please wait for connection to establish");
+      return;
+    }
+
+    if (username.trim() && selectedRoom.trim()) {
+      socket.emit("join-room", {
+        username: username.trim(),
+        roomName: selectedRoom,
+      });
+    }
+  };
+
+  const createRoom = () => {
+    if (!isConnected) return;
+
+    if (newRoomName.trim()) {
+      socket.emit("create-room", { roomName: newRoomName.trim() });
+    }
+  };
+
+  const leaveRoom = () => {
+    if (socket) {
+      socket.emit("leave-room");
+    }
+    setCurrentScreen("join");
+    setUserCount(0);
+    setMessages([]);
+    setSelectedRoom("");
+  };
+
+  const sendMessage = () => {
+    if (!isConnected) return;
+
+    if (newMessage.trim()) {
+      socket.emit("send-message", {
+        text: newMessage.trim(),
+        roomName: selectedRoom,
+      });
+      setNewMessage("");
+    }
+  };
+
+  const handleKeyPress = (e, action) => {
+    if (e.key === "Enter") {
+      action();
+    }
+  };
+
+  if (!isConnected && currentScreen === "join") {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full border border-gray-700">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold mb-2 text-gray-100">
+              Connecting to Chat Server...
+            </h2>
+            {connectionError && (
+              <p className="text-red-400 text-sm">{connectionError}</p>
+            )}
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      </div>
+    );
+  }
+
+  if (currentScreen === "join") {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full border border-gray-700">
+          <h1 className="text-2xl font-bold text-center mb-6 text-gray-100">
+            Join Chat Room
+          </h1>
+
+          <div className="mb-4">
+            <label className="block text-gray-300 text-sm font-bold mb-2">
+              Your Name
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyPress={(e) => handleKeyPress(e, joinRoom)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100 placeholder-gray-400"
+              placeholder="Enter your username"
+              maxLength={20}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-gray-300 text-sm font-bold mb-2">
+              Select Room
+            </label>
+            <select
+              value={selectedRoom}
+              onChange={(e) => setSelectedRoom(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100"
+            >
+              <option value="">Choose a room...</option>
+              {rooms.map((room, index) => (
+                <option key={index} value={room.name}>
+                  {room.name} ({room.userCount} users)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-gray-300 text-sm font-bold mb-2">
+              Or Create New Room
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                onKeyPress={(e) => handleKeyPress(e, createRoom)}
+                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100 placeholder-gray-400"
+                placeholder="Room name"
+                maxLength={30}
+              />
+              <button
+                onClick={createRoom}
+                disabled={!newRoomName.trim()}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-600"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={joinRoom}
+            disabled={!username.trim() || !selectedRoom.trim()}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 font-medium"
+          >
+            Join Room
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-gray-100">
+      <div className="bg-gray-800 shadow-sm border-b border-gray-700 px-4 py-3">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-100">
+              Room: {selectedRoom}
+            </h1>
+            <p className="text-sm text-gray-400">{userCount} users online</p>
+          </div>
+          <button
+            onClick={leaveRoom}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          >
+            Leave Room
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 pb-20 max-h-screen">
+        <div className="max-w-3xl mx-auto">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`mb-4 p-3 rounded-lg max-w-xs ${
+                message.user === username
+                  ? "bg-blue-600 text-white ml-auto"
+                  : message.user === "System" || message.user === "Server"
+                    ? "bg-gray-700 text-gray-300 mx-auto text-center"
+                    : "bg-gray-700 shadow-sm text-gray-100"
+              }`}
+            >
+              {message.user !== "System" &&
+                message.user !== "Server" &&
+                message.user !== username && (
+                  <div className="text-xs font-semibold mb-1 text-gray-300">
+                    {message.user}
+                  </div>
+                )}
+              <div className="text-sm">{message.text}</div>
+              <div className="text-xs opacity-70 mt-1">{message.timestamp}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4">
+        <div className="max-w-3xl mx-auto flex gap-2">
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={(e) => handleKeyPress(e, sendMessage)}
+            className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-100 placeholder-gray-400"
+            placeholder="Type your message..."
+            maxLength={500}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <button
+            onClick={sendMessage}
+            disabled={!newMessage.trim()}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-600"
+          >
+            Send
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
