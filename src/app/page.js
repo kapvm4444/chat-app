@@ -39,7 +39,9 @@ export default function Home() {
 
   const socketInitializer = async () => {
     try {
-      socket = io(`http://localhost:${process.env.PORT || 3001}`);
+      socket = io(`http://localhost:${process.env.PORT || 3001}`, {
+
+      });
       // socket = io();
 
       socket.on("connect", () => {

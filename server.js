@@ -54,7 +54,7 @@ class SocketService {
   initializeServer(server) {
     this.io = new Server(server, {
       cors: {
-        origin: "https://chat.khush.pro",
+        origin: ["https://chat.khush.pro", "http://localhost:3001", "http://localhost:3000"],
         methods: ["GET", "POST"],
         credentials: false,
       },
