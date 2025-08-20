@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   devIndicators: false,
-  allowedDevOrigins: ["http://localhost:3001"]
+  allowedDevOrigins: ["https://chat.khush.pro"]
 };
 
 export default nextConfig;
