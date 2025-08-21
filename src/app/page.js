@@ -173,7 +173,7 @@ export default function Home() {
           {/* Username Input */}
           <div className="mb-6">
             <label className="block text-gray-300 text-sm font-bold mb-2">
-              Your Name Wooooohooooooo
+              Your Name
             </label>
             <input
               type="text"
